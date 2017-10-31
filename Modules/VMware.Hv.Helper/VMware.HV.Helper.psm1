@@ -5948,10 +5948,30 @@ function Set-HVPool {
     foreach ($item in $poolList.Keys) {
       Write-Host "Updating the Pool: " $poolList.$item
       if (!$confirmFlag -OR  $pscmdlet.ShouldProcess($poolList.$item)) {
+      ##add error handling
+      try {
        $desktop_helper.Desktop_Update($services,$item,$updates)
       }
-    }
-  }
+      catch {
+        if ($_.Exception.InnerException.MethodFault.ErrorMessage -eq "Invalid member name.") { #a specific case that could be handled/explained better
+            #I'm going with write-error as a non-interupting response to something wrong.  However, it could just as easily be a throw (stop-everything).
+            Write-Error "The key <$($_.Exception.InnerException.MethodFault.ParameterName)> was not found on the object; please note properties are case-sensitive."
+        }
+        elseif ($_.Exception.InnerException.MethodFault.ErrorMessage -eq "Invalid argument type for this member.") { #a specific case that could be handled/explained better
+            #I'm going with write-error as a non-interupting response to something wrong.  However, it could just as easily be a throw (stop-everything).
+            Write-Error "The key <$($_.Exception.InnerException.MethodFault.ParameterName)> was expecting a type of [$($_.Exception.InnerException.MethodFault.ExpectedType)]."
+        }
+        elseif ($_.Exception.InnerException.MethodFault -ne "") {#a more general case that still may be easier to read than the whole exception object
+            Write-Error "The key <$($_.Exception.InnerException.MethodFault.ParameterName)> could not be set because: $($_.Exception.InnerException.MethodFault.ErrorMessage)."
+        }
+        else {
+            #if we don't know what else the exception is, just forward the exception
+            throw $_.exception
+        }
+      }
+      } #end if shouldprocess/confirm
+    } #end foreach
+  } #end process block
 
   end {
     [System.gc]::collect()
